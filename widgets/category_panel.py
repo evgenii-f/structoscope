@@ -29,12 +29,26 @@ def clean_path(path: str, strip_val: int) -> str:
     )
 
 
-@dataclass
 class TargetFeature:
-    name: str
-    extractor: Callable[[pd.Series], np.ndarray]
-    is_atom_level: bool = False
+    """
+    A lightweight wrapper for defining how to extract and transform
+    a column from a DataFrame for further analysis or visualization.
 
+    Parameters:
+        name (str): The name of the column in the DataFrame.
+        extractor (Callable): Optional function to transform the column
+            (defaults to returning values as a numpy array).
+
+    Example:
+        >>> TargetFeature("energy")  # takes column as-is
+        >>> TargetFeature("forces", lambda s: np.linalg.norm(np.vstack(s), axis=1))
+    """
+    def __init__(self, name: str, extractor: Callable[[pd.Series], np.ndarray] = None):
+        self.name = name
+        self.extractor = extractor or (lambda s: s.to_numpy())
+
+    def __call__(self, series: pd.Series) -> np.ndarray:
+        return self.extractor(series)
 
 class BaseCategoryPanel(widgets.VBox):
     def __init__(
