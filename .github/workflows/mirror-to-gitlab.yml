@@ -1,0 +1,24 @@
+name: Mirror to GitLab
+
+on:
+  push:
+    branches:
+      - dev
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout GitHub repo
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0 
+
+      - name: Push dev branch to GitLab
+        run: |
+          git config --global user.name "GitHub Mirror Bot"
+          git config --global user.email "mirror@github-actions"
+          
+          git remote add gitlab https://oauth2:${{ secrets.GITLAB_ICAMS_TOKEN }}@git.noc.ruhr-uni-bochum.de/atomicclusterexpansion/structoscope.git
+          git push gitlab dev --force
