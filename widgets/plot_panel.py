@@ -4,7 +4,9 @@ from typing import Callable, Sequence, Mapping, Optional
 
 import pandas as pd
 from IPython.core.display_functions import clear_output
-from ipywidgets import widgets
+from ipywidgets import widgets, Output, Button, Dropdown, HBox
+
+from widgets.save_panel import SavePanel
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -107,3 +109,86 @@ def make_slider(df, col, label=None, step=0.01):
         layout=widgets.Layout(width='95%'),
         continuous_update=False
     )
+
+
+class KnapsackPanel(PlotPanel):
+    def __init__(self, df, categories, plot_funcs, filter_elements, name_col="name"):
+        super().__init__(df, categories, plot_funcs, filter_elements, name_col=name_col)
+
+        self.knapsack_df = pd.DataFrame()
+        self.output_knapsack_data = Output()
+
+        # Action buttons
+        self.add_btn = Button(description="Add", button_style='success')
+        self.subtract_btn = Button(description="Subtract", button_style='warning')
+        self.reset_btn = Button(description="Reset", button_style='danger')
+
+        self.add_btn.on_click(self.on_add)
+        self.subtract_btn.on_click(self.on_subtract)
+        self.reset_btn.on_click(self.on_reset)
+
+        # Knapsack plot selection
+        self.knapsack_plot_ddown = Dropdown(
+            description='Knapsack plot:',
+            options=list(self.plot_funcs.keys()),
+            value=next(iter(self.plot_funcs.keys()))
+        )
+        self.knapsack_plot_ddown.observe(self.on_knapsack_plot_change, names="value")
+        self.active_plot_knapsack_func = self.plot_funcs[self.knapsack_plot_ddown.value]
+
+        # Use existing SavePanel
+        self.save_panel = SavePanel(lambda path: self.knapsack_df.to_pickle(path))
+
+        # Extend UI
+        self.children += (
+            HBox([self.add_btn, self.subtract_btn, self.reset_btn]),
+            self.knapsack_plot_ddown,
+            self.output_knapsack_data,
+            self.save_panel
+        )
+
+    def on_add(self, _=None):
+        new_data = self._get_filtered_df()
+        with self.output_knapsack_data:
+            clear_output()
+            if not new_data.empty:
+                updated = (
+                    pd.concat([self.knapsack_df, new_data], ignore_index=True)
+                    .drop_duplicates(subset=[self.name_col])
+                )
+                added = len(updated) - len(self.knapsack_df)
+                self.knapsack_df = updated
+                print(f"✅ Added {added} entries. Total: {len(self.knapsack_df)}")
+                self.update_knapsack_plot()
+            else:
+                print("⚠️ Nothing to add.")
+
+    def on_subtract(self, _=None):
+        to_remove = self._get_filtered_df()
+        with self.output_knapsack_data:
+            clear_output()
+            if not to_remove.empty:
+                reduced = self.knapsack_df[~self.knapsack_df[self.name_col].isin(to_remove[self.name_col])]
+                n_removed = len(self.knapsack_df) - len(reduced)
+                self.knapsack_df = reduced
+                print(f"➖ Removed {n_removed} entries. Total: {len(self.knapsack_df)}")
+                self.update_knapsack_plot()
+            else:
+                print("⚠️ Nothing to subtract.")
+
+    def on_reset(self, _=None):
+        self.knapsack_df = pd.DataFrame()
+        with self.output_knapsack_data:
+            clear_output()
+            print("♻️ Knapsack reset.")
+
+    def on_knapsack_plot_change(self, change):
+        self.active_plot_knapsack_func = self.plot_funcs[change["new"]]
+        self.update_knapsack_plot()
+
+    def update_knapsack_plot(self):
+        with self.output_knapsack_data:
+            clear_output()
+            print(f"{len(self.knapsack_df)} structures in knapsack")
+            if not self.knapsack_df.empty:
+                self.active_plot_knapsack_func(self.knapsack_df)
